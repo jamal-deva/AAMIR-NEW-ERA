@@ -8,24 +8,34 @@ import { LazyVideo } from './components/LazyVideo';
 import { useThrottledMouseTracking } from './hooks/useThrottledMouseTracking';
 import { MobileBadgeCarousel } from './components/MobileBadgeCarousel';
 
+// Performance optimizations for mobile
+const MOBILE_BREAKPOINT = 768;
+const isMobile = () => window.innerWidth < MOBILE_BREAKPOINT;
+
+// Optimized mobile viewport height with caching
+let cachedMobileVH: number | null = null;
+let lastWindowHeight = 0;
+
 // Mobile viewport height handler
 function setMobileVH() {
-  if (window.innerWidth < 768) {
-    let vh = window.innerHeight * 0.01;
-    document.documentElement.style.setProperty('--mobile-vh', `${vh}px`);
+  if (isMobile()) {
+    const currentHeight = window.innerHeight;
+    // Only update if height changed significantly (avoid constant recalculation)
+    if (Math.abs(currentHeight - lastWindowHeight) > 10) {
+      lastWindowHeight = currentHeight;
+      cachedMobileVH = currentHeight * 0.01;
+      document.documentElement.style.setProperty('--mobile-vh', `${cachedMobileVH}px`);
+    }
   }
 }
 
 // Register ScrollTrigger plugin
 gsap.registerPlugin(ScrollTrigger);
 
-// Check if device is mobile
-const isMobile = () => window.innerWidth < 768;
-
 // Mobile viewport height helper
 const getMobileVH = () => {
-  if (typeof window !== 'undefined' && window.innerWidth < 768) {
-    return window.innerHeight;
+  if (typeof window !== 'undefined' && isMobile()) {
+    return cachedMobileVH ? cachedMobileVH * 100 : window.innerHeight;
   }
   return null;
 };
@@ -141,7 +151,7 @@ function App() {
     setMobileVH();
     
     const updateMobileVH = () => {
-      if (window.innerWidth < 768) {
+      if (isMobile()) {
         setMobileVH(window.innerHeight);
         // Also update CSS custom property
         setMobileVH();
@@ -150,15 +160,31 @@ function App() {
       }
     };
 
-    window.addEventListener('resize', updateMobileVH);
-    window.addEventListener('orientationchange', updateMobileVH);
-    // Also listen for viewport changes (URL bar hide/show)
-    window.addEventListener('scroll', setMobileVH);
+    // Throttled resize handler for better performance
+    let resizeTimeout: NodeJS.Timeout;
+    const throttledResize = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(updateMobileVH, 100);
+    };
+
+    // Throttled orientation change handler
+    let orientationTimeout: NodeJS.Timeout;
+    const throttledOrientation = () => {
+      clearTimeout(orientationTimeout);
+      orientationTimeout = setTimeout(() => {
+        setMobileVH();
+        updateMobileVH();
+      }, 200);
+    };
+
+    window.addEventListener('resize', throttledResize, { passive: true });
+    window.addEventListener('orientationchange', throttledOrientation, { passive: true });
 
     return () => {
-      window.removeEventListener('resize', updateMobileVH);
-      window.removeEventListener('orientationchange', updateMobileVH);
-      window.removeEventListener('scroll', setMobileVH);
+      window.removeEventListener('resize', throttledResize);
+      window.removeEventListener('orientationchange', throttledOrientation);
+      clearTimeout(resizeTimeout);
+      clearTimeout(orientationTimeout);
     };
   }, []);
   // Handle splash screen completion
@@ -170,7 +196,7 @@ function App() {
     ScrollTrigger.getAll().forEach(trigger => trigger.kill());
     gsap.registerPlugin(ScrollTrigger);
 
-    // Desktop-only hero animations
+    // Desktop-only hero animations with performance optimization
     if (!isMobile()) {
       // Create a single timeline for all hero elements
       const heroTl = gsap.timeline({
@@ -181,6 +207,7 @@ function App() {
           scrub: 4,
           invalidateOnRefresh: false,
           ease: "power2.out",
+          fastScrollEnd: true,
         }
       });
 
@@ -190,7 +217,8 @@ function App() {
         if (element) {
           heroTl.to(element, { 
             y: 50,
-            ease: "power2.out"
+            ease: "power2.out",
+            force3D: true,
           }, 0);
         }
       }); 
@@ -199,11 +227,13 @@ function App() {
       gsap.to(newMainTextRef.current, {
         y: 100,
         opacity: 0,
+        force3D: true,
         scrollTrigger: {
           trigger: portraitRef.current,
           start: "top top",
           end: "top+=3000",
-          scrub: 0.5
+          scrub: 0.5,
+          fastScrollEnd: true,
         }
       }); 
 
@@ -212,29 +242,33 @@ function App() {
         y: -200,
         scaleY: 1,
         transformOrigin: "top center",
+        force3D: true,
         scrollTrigger: {
           trigger: heroRef.current,
           start: "center center",
           end: "bottom top",
           scrub: 1,
+          fastScrollEnd: true,
         }
       });
     }
 
-    // Portfolio section animation
+    // Portfolio section animation with mobile optimization
     if (portfolioSectionRef.current) {
       gsap.to(portfolioSectionRef.current, {
         y: -900,
+        force3D: true,
         scrollTrigger: {
           trigger: portfolioSectionRef.current,
           start: "top bottom",
           end: "bottom top",
-          scrub: 1,
+          scrub: isMobile() ? 0.5 : 1, // Faster scrub on mobile for smoother feel
+          fastScrollEnd: true,
         }
       });
     }
 
-    // Visibility triggers
+    // Visibility triggers with mobile optimization
     const visibilityTriggers = [
       {
         start: "center top",
@@ -266,16 +300,18 @@ function App() {
         trigger: portfolioSectionRef.current,
         start: trigger.start,
         fastScrollEnd: true,
+        refreshPriority: isMobile() ? -1 : 0, // Lower priority on mobile
         onEnter: trigger.onEnter,
         onLeaveBack: trigger.onLeaveBack,
       });
     });
 
-    // Mobile badge visibility trigger
+    // Mobile badge visibility trigger with optimization
     ScrollTrigger.create({
       trigger: portfolioSectionRef.current,
       start: "top center",
       fastScrollEnd: true,
+      refreshPriority: -1,
       onEnter: () => setShowMobileBadges(false),
       onLeaveBack: () => setShowMobileBadges(true),
     });
@@ -321,8 +357,9 @@ function App() {
         ref={heroRef}
         className="relative w-full overflow-hidden bg-transparent chromatic-aberration"
         style={{ 
-          minHeight: window.innerWidth < 768 ? 'calc(var(--mobile-vh) * 100)' : '100vh',
-          height: window.innerWidth < 768 ? 'calc(var(--mobile-vh) * 100)' : '100vh'
+          minHeight: isMobile() ? 'calc(var(--mobile-vh) * 100)' : '100vh',
+          height: isMobile() ? 'calc(var(--mobile-vh) * 100)' : '100vh',
+          willChange: isMobile() ? 'auto' : 'transform',
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -333,16 +370,17 @@ function App() {
         ref={baseRef}
         className={`fixed inset-0 flex items-center justify-center z-20 transition-opacity duration-100`}
         style={{
-          top: window.innerWidth < 768 ? "30%" : "10%",
+          top: isMobile() ? "30%" : "10%",
           left: "0%",
           opacity: showbase ? 1 : 0,
           pointerEvents: showbase ? "auto" : "none",
+          willChange: isMobile() ? 'opacity' : 'transform, opacity',
         }}
       > 
         <div className="relative">
           <div
             className="
-              w-[34.65rem] h-[34.65rem]
+              w-[280px] h-[280px]
               sm:w-[540px] sm:h-[540px]
               md:w-[45rem] md:h-[45rem]
               lg:w-[56.25rem] lg:h-[56.25rem]
@@ -353,6 +391,8 @@ function App() {
               src="/base.png"
               alt="Base"
               className="w-full h-full object-cover"
+              loading="eager"
+              decoding="async"
               style={{ transform: "scale(1.05)" }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/0 via-transparent to-transparent" />
@@ -365,16 +405,19 @@ function App() {
         ref={portraitRef}
         className={`fixed inset-0 flex items-center justify-center z-40 transition-opacity duration-100`}
         style={{
-          top: window.innerWidth < 768 ? "30%" : "10%", 
+          top: isMobile() ? "30%" : "10%", 
           left: "0%",
           opacity: showportrait ? 1 : 0,
           pointerEvents: showportrait ? "auto" : "none",
+          willChange: isMobile() ? 'opacity' : 'transform, opacity',
         }}
       >
         <div className="relative"> 
           <div
             className="
-              w-[34.65rem] h-[34.65rem] 
+              w-[280px] h-[280px]
+              sm:w-[540px] sm:h-[540px]
+              md:w-[45rem] md:h-[45rem]
               lg:w-[56.25rem] lg:h-[56.25rem]
               overflow-hidden
             "
@@ -383,6 +426,8 @@ function App() {
               src="/me.png"
               alt="Portrait"
               className="w-full h-full object-cover"
+              loading="eager"
+              decoding="async"
               style={{ transform: "scale(1.05)" }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/0 via-transparent to-transparent" />
@@ -395,17 +440,18 @@ function App() {
         ref={eyesRef}
         className={`fixed inset-0 flex items-center justify-center z-30 transition-opacity duration-100`}
         style={{
-          top: window.innerWidth < 768 ? "30%" : "10%",
+          top: isMobile() ? "30%" : "10%",
           left: "0%",
           opacity: showeyes ? 1 : 0,
           pointerEvents: showeyes ? "auto" : "none",
           transform: isMobile() ? 'none' : `translate(${mousePosition.x * 8}px, ${mousePosition.y * 8}px)`,
+          willChange: isMobile() ? 'opacity' : 'transform, opacity',
         }}
       >
         <div className="relative">
           <div
             className="
-              w-[34.65rem] h-[34.65rem]
+              w-[280px] h-[280px]
               sm:w-[540px] sm:h-[540px]
               md:w-[45rem] md:h-[45rem]
               lg:w-[56.25rem] lg:h-[56.25rem]
@@ -417,6 +463,8 @@ function App() {
               src="/eyes.png"
               alt="Eyes"
               className="w-full h-full object-cover"
+              loading="eager"
+              decoding="async"
               style={{ transform: "scale(1.05)" }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/0 via-transparent to-transparent" />
@@ -448,24 +496,24 @@ function App() {
         {/* New Main Typography - Full Width Light Font */}
         <div 
           ref={newMainTextRef}
-          className="absolute top-0 left-0 right-0 flex items-start justify-center z-40 w-full px-6" 
+          className="absolute top-0 left-0 right-0 flex items-start justify-center z-40 w-full px-4 sm:px-6" 
           style={{ top: '0%' }}
         >
           <div className="w-full text-center">
             <h1 
-              className="text-3xl md:text-6xl lg:text-4xl text-white/100 leading-none opacity-0 animate-fade-in-delayed"
+              className="text-2xl sm:text-3xl md:text-6xl lg:text-4xl text-white/100 leading-tight sm:leading-none opacity-0 animate-fade-in-delayed"
               style={{ 
                 fontFamily: 'IBM Plex Sans, sans-serif',
                 fontWeight: '100', 
-                fontSize: '100%',
-                letterSpacing: '0.4em',
-                wordSpacing: '2em',
+                fontSize: isMobile() ? '1.25rem' : '100%',
+                letterSpacing: isMobile() ? '0.2em' : '0.4em',
+                wordSpacing: isMobile() ? '0.5em' : '2em',
                 animationDelay: '0.8s', 
                 animationFillMode: 'forwards',
                 textShadow: '0 10px 20px rgba(0,0,0,0.3)'
               }}
             >
-           I EDIT VISUALS            THAT BUILD BRAND
+              {isMobile() ? 'I EDIT VISUALS THAT BUILD BRAND' : 'I EDIT VISUALS            THAT BUILD BRAND'}
             </h1>
           </div>
         </div>
@@ -474,15 +522,14 @@ function App() {
         {/* New Scroll Indicator */}
         <div 
           ref={newScrollIndicatorRef}
-          className="fixed inset-0 left-[-0.6%] top-[90%] -translate-x-1/2 opacity-0 animate-fade-in-delayed z-40 cursor-pointer"
+          className="fixed bottom-8 left-1/2 -translate-x-1/2 opacity-0 animate-fade-in-delayed z-40 cursor-pointer"
           style={{ 
-            bottom: '10%', 
             animationDelay: '2.5s', 
             animationFillMode: 'forwards'
           }}
           onClick={() => {
             portfolioSectionRef.current?.scrollIntoView({ 
-              behavior: 'smooth' 
+              behavior: isMobile() ? 'auto' : 'smooth' // Instant scroll on mobile for better performance
             });
           }}
         >
@@ -490,19 +537,19 @@ function App() {
             {/* Animated scroll indicator */}
             <div className="relative">
               {/* Outer ring */}
-              <div className="w-14 h-14 rounded-full border-2 border-white/30 flex items-center justify-center group-hover:border-white/50 transition-all duration-300">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-white/30 flex items-center justify-center group-hover:border-white/50 transition-all duration-300">
                 {/* Inner animated chevron */}
-                <div className="flex flex-col items-center animate-pulse">
+                <div className={`flex flex-col items-center ${isMobile() ? '' : 'animate-pulse'}`}>
                   <div className="w-0 h-0 border-l-[5px] border-r-[5px] border-t-[7px] border-l-transparent border-r-transparent border-t-white/70 mb-1" />
                   <div className="w-0 h-0 border-l-[5px] border-r-[5px] border-t-[7px] border-l-transparent border-r-transparent border-t-white/50" />
                 </div>
               </div>
               
               {/* Pulsing background effect */}
-              <div className="absolute inset-0 rounded-full bg-white/5 animate-ping" style={{ animationDuration: '3s' }} />
+              <div className={`absolute inset-0 rounded-full bg-white/5 ${isMobile() ? '' : 'animate-ping'}`} style={{ animationDuration: '3s' }} />
             </div>
             
-            <p className="text-white/50 text-xs font-bosenAlt mt-3 uppercase tracking-widest group-hover:text-white/70 transition-colors duration-300">
+            <p className="text-white/50 text-xs font-bosenAlt mt-2 sm:mt-3 uppercase tracking-widest group-hover:text-white/70 transition-colors duration-300">
               Explore Work
             </p>
           </div>
@@ -536,26 +583,27 @@ function App() {
       {/* Portfolio Section */}
       <div 
         ref={portfolioSectionRef} 
-        className="relative w-full bg-white z-[100] rounded-t-[3rem] rounded-b-[3rem] opacity-100"
+        className="relative w-full bg-white z-[100] rounded-t-[2rem] sm:rounded-t-[3rem] rounded-b-[2rem] sm:rounded-b-[3rem] opacity-100"
         style={{ 
-          minHeight: window.innerWidth < 768 ? 'calc(var(--mobile-vh) * 100)' : '100vh',
-          zIndex: 9999 
+          minHeight: isMobile() ? 'calc(var(--mobile-vh) * 100)' : '100vh',
+          zIndex: 9999,
+          willChange: 'transform',
         }}
       >
 
-        <div className="container mx-auto px-6 py-20">
+        <div className="container mx-auto px-4 sm:px-6 py-12 sm:py-20">
           <div className="relative text-center mb-16 z-20">
-            <h2 className="text-5xl md:text-7xl lg:text-8xl font-bosenAlt text-black/90 mb-6 tracking-tight">
+            <h2 className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-bosenAlt text-black/90 mb-4 sm:mb-6 tracking-tight">
               PORTFOLIO
             </h2>
-            <p className="text-xl md:text-2xl text-black/60 max-w-3xl mx-auto leading-relaxed">
+            <p className="text-lg sm:text-xl md:text-2xl text-black/60 max-w-3xl mx-auto leading-relaxed px-4">
               Visual stories that shape brands and captivate audiences worldwide
             </p>
           </div>
           
   {/* Show Reel Section */}
-          <div className="relative mb-20 z-20">
-            <h3 className="text-3xl md:text-4xl font-bosenAlt text-black/80 mb-8 text-center tracking-tight">
+          <div className="relative mb-12 sm:mb-20 z-20">
+            <h3 className="text-2xl sm:text-3xl md:text-4xl font-bosenAlt text-black/80 mb-6 sm:mb-8 text-center tracking-tight">
               SHOW REEL
             </h3>
             <div className="max-w-4xl mx-auto">
@@ -569,11 +617,11 @@ function App() {
           </div>
 
 {/* 3x3 Grid of 16:9 Videos */}
-<div className="relative mb-20 z-30">
-  <h3 className="text-3xl md:text-4xl font-bosenAlt text-black/80 mb-8 text-center tracking-tight">
+<div className="relative mb-12 sm:mb-20 z-30">
+  <h3 className="text-2xl sm:text-3xl md:text-4xl font-bosenAlt text-black/80 mb-6 sm:mb-8 text-center tracking-tight">
     FEATURED WORK
   </h3>
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-7xl mx-auto">
     {[
       "https://ia600904.us.archive.org/35/items/portfolio_202508/Outworking%20everyone%20isn%E2%80%99t%20that%20hard%20v1.mp4",
       "https://ia600904.us.archive.org/35/items/portfolio_202508/What%20is%20the%20most%20normal%20episode%20of%20Family%20Guy%20v3.mp4",
@@ -597,8 +645,8 @@ function App() {
 </div>
 
 {/* 6x4 Grid of 9:16 Videos */}
-<div className="relative mb-20 z-30">
-  <h3 className="text-3xl md:text-4xl font-bosenAlt text-black/80 mb-8 text-center tracking-tight">
+<div className="relative mb-12 sm:mb-20 z-30">
+  <h3 className="text-2xl sm:text-3xl md:text-4xl font-bosenAlt text-black/80 mb-6 sm:mb-8 text-center tracking-tight">
     SOCIAL CONTENT
   </h3>
   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
@@ -638,65 +686,66 @@ function App() {
           id="contact-section"
           className={`fixed bottom-0 left-0 right-0 w-full overflow-hidden flex flex-col items-center justify-center z-30 bg-transparent opacity-0 animate-fade-in-delayed`}
           style={{
-            height: window.innerWidth < 768 ? 'calc(var(--mobile-vh) * 100)' : '100vh',
+            height: isMobile() ? 'calc(var(--mobile-vh) * 100)' : '100vh',
             animationDelay: '0.2s', 
             animationFillMode: 'forwards',
-            pointerEvents: 'auto'
+            pointerEvents: 'auto',
+            willChange: 'opacity',
           }}
         > 
          {/* Main Heading */}
-          <h2 className="text-5xl md:text-7xl font-bosenAlt text-white/80 text-center mb-0 tracking-wide">
+          <h2 className="text-3xl sm:text-4xl md:text-7xl font-bosenAlt text-white/80 text-center mb-0 tracking-wide px-4">
             LET'S START A CONVERSATION
           </h2>
 
          {/* Subheading */}
-<p className="text-white/30 text-1xl md:text-4xl lg:text-4xl ibm-font mb-8 text-center">
+<p className="text-white/30 text-lg sm:text-xl md:text-4xl lg:text-4xl ibm-font mb-6 sm:mb-8 text-center px-4">
   Drop me a message, let's make something users will love.
 </p>
 
-<div className="space-y-10 text-center">
+<div className="space-y-6 sm:space-y-10 text-center px-4">
             {/* Email */}
             <div className="flex flex-col items-center gap-2">
-              <Mail className="text-white/70 w-8 h-8" />
+              <Mail className="text-white/70 w-6 h-6 sm:w-8 sm:h-8" />
               <a
                 href="https://mail.google.com/mail/?view=cm&to=broskiagency@gmail.com" target="_blank"
-                className="text-white/80 font-bosenAlt text-xl md:text-xl lg:text-2xl tracking-wide hover:text-blue-500 transition-colors duration-200"
+                className="text-white/80 font-bosenAlt text-lg sm:text-xl md:text-xl lg:text-2xl tracking-wide hover:text-blue-500 transition-colors duration-200"
               >
                 BROSKIAGENCY@GMAIL.COM
               </a>
-              <p className="text-white/30 text-xl md:text-1xl lg:text-2xl ibm-font mb-0 text-center">
+              <p className="text-white/30 text-sm sm:text-lg md:text-xl lg:text-2xl ibm-font mb-0 text-center">
   Let's create something that actually works.
 </p>
             </div>
 
             {/* LinkedIn */}
             <div className="flex flex-col items-center gap-0">
-              <Linkedin className="text-white/70 w-8 h-8" />
+              <Linkedin className="text-white/70 w-6 h-6 sm:w-8 sm:h-8" />
               <a
                 href="https://www.linkedin.com/in/aamir-naqvi/"
                 target="_blank"
                 rel="noopener noreferrer"
-  className="text-white/80 font-bosenAlt text-xl md:text-xl lg:text-2xl tracking-wide hover:text-blue-500 transition-colors duration-200"
+  className="text-white/80 font-bosenAlt text-lg sm:text-xl md:text-xl lg:text-2xl tracking-wide hover:text-blue-500 transition-colors duration-200"
               >
                 LINKEDIN
               </a>
-              <p className="text-white/30 text-xl md:text-1xl lg:text-2xl ibm-font mb-0 text-center">
+              <p className="text-white/30 text-sm sm:text-lg md:text-xl lg:text-2xl ibm-font mb-0 text-center">
                 See how UX meets business - connect with me.
               </p>
             </div>
 
             {/* Instagram */}
             <div className="flex flex-col items-center gap-2">
-              <Instagram className="text-white/70 w-8 h-8" />
+              <Instagram className="text-white/70 w-6 h-6 sm:w-8 sm:h-8" />
               <a
                 href="https://www.instagram.com/aamir.naqvii/"
                 target="_blank"
                 rel="noopener noreferrer"
-                  className="text-white/80 font-bosenAlt text-xl md:text-xl lg:text-2xl tracking-wide hover:text-blue-500 transition-colors duration-200"
+                  className="text-white/80 font-bosenAlt text-lg sm:text-xl md:text-xl lg:text-2xl tracking-wide hover:text-blue-500 transition-colors duration-200"
               >
                 INSTAGRAM
               </a>
-           <p className="text-white/30 text-xl md:text-1xl lg:text-2xl ibm-font mb-0 text-center">
+           <p className="text-white/30 text-sm sm:text-lg md:text-xl lg:text-2xl ibm-font mb-0 text-center">
                 Tap in for visuals with purpose. - follow the flow.
               </p>
             </div>

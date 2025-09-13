@@ -4,6 +4,12 @@ import { Maximize2, X, Play, Pause } from "lucide-react";
 // Check if device is mobile
 const isMobile = () => window.innerWidth < 768;
 
+// Optimized intersection observer options for mobile
+const getObserverOptions = () => ({
+  rootMargin: isMobile() ? '50px' : '100px',
+  threshold: isMobile() ? 0.05 : 0.1
+});
+
 interface VideoThumbnailProps {
   src: string;
   title: string;
@@ -31,6 +37,13 @@ export function VideoThumbnail({
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false);
 
   const aspectClasses = aspectRatio === "vertical" ? "aspect-[9/16]" : "aspect-video";
+  
+  // Mobile-optimized class names
+  const containerClasses = `relative group cursor-pointer ${aspectClasses} rounded-lg sm:rounded-xl overflow-hidden shadow-md sm:shadow-lg transition-all duration-300 ${
+    isFullscreen 
+      ? 'fixed inset-0 z-[9999] !rounded-none !aspect-auto w-screen h-screen bg-black' 
+      : (isMobile() ? '' : 'hover:shadow-xl hover:scale-105')
+  } ${className}`;
 
   // Get thumbnail path
   const getThumbnailPath = () => {
@@ -52,10 +65,7 @@ export function VideoThumbnail({
           observer.disconnect();
         }
       },
-      { 
-        rootMargin: '100px',
-        threshold: 0.1
-      }
+      getObserverOptions()
     );
 
     observer.observe(container);
@@ -65,6 +75,11 @@ export function VideoThumbnail({
 
   const handleClick = async () => {
     if (!videoRef.current) return;
+
+    // Add haptic feedback on mobile
+    if (isMobile() && 'vibrate' in navigator) {
+      navigator.vibrate(50);
+    }
 
     if (isPlaying) {
       videoRef.current.pause();
@@ -89,6 +104,12 @@ export function VideoThumbnail({
 
   const toggleFullscreen = (e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // Add haptic feedback on mobile
+    if (isMobile() && 'vibrate' in navigator) {
+      navigator.vibrate(30);
+    }
+    
     if (!isFullscreen) {
       containerRef.current?.requestFullscreen?.();
     } else {
@@ -106,21 +127,22 @@ export function VideoThumbnail({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  // Mobile-optimized button sizes
   const playButtonSize = aspectRatio === 'vertical' 
-    ? (isFullscreen ? 'w-20 h-20' : 'w-12 h-12')
-    : (isFullscreen ? 'w-24 h-24' : 'w-16 h-16');
+    ? (isFullscreen ? 'w-16 sm:w-20 h-16 sm:h-20' : 'w-10 sm:w-12 h-10 sm:h-12')
+    : (isFullscreen ? 'w-20 sm:w-24 h-20 sm:h-24' : 'w-12 sm:w-16 h-12 sm:h-16');
 
   const thumbnailPath = getThumbnailPath();
 
   return (
     <div
       ref={containerRef}
-      className={`relative group cursor-pointer ${aspectClasses} rounded-xl overflow-hidden shadow-lg transition-all duration-300 ${
-        isFullscreen 
-          ? 'fixed inset-0 z-[9999] !rounded-none !aspect-auto w-screen h-screen bg-black' 
-          : (isMobile() ? '' : 'hover:shadow-xl hover:scale-105')
-      } ${className}`}
+      className={containerClasses}
       onClick={handleClick}
+      style={{ 
+        willChange: isMobile() ? 'auto' : 'transform',
+        touchAction: 'manipulation' // Optimize touch interactions
+      }}
     >
       {/* Static thumbnail image */}
       {thumbnailPath && isInView && (
@@ -132,6 +154,8 @@ export function VideoThumbnail({
           } transition-opacity duration-300 ${
             isPlaying ? 'opacity-0' : 'opacity-100'
           }`}
+          loading={isMobile() ? "lazy" : "eager"}
+          decoding="async"
           onLoad={() => setThumbnailLoaded(true)}
           onError={() => {
             console.warn(`Thumbnail not found: ${thumbnailPath}`);
@@ -151,7 +175,8 @@ export function VideoThumbnail({
           }`}
           loop={isShowreel}
           playsInline
-          preload="none"
+          preload={isMobile() ? "none" : "metadata"}
+          muted={isMobile()} // Muted by default on mobile for autoplay policies
           onLoadedData={() => {
             console.log('Video loaded data');
             setVideoLoaded(true);
@@ -175,6 +200,7 @@ export function VideoThumbnail({
             setIsPlaying(false);
             console.error('Video failed to load:', src);
           }}
+          style={{ willChange: 'opacity' }}
         />
       )}
 
@@ -182,7 +208,7 @@ export function VideoThumbnail({
       {(!thumbnailLoaded && !thumbnailPath) && (
         <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
           <div className="text-white/40 text-center">
-            <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin mx-auto mb-2" />
+            <div className="w-6 h-6 sm:w-8 sm:h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin mx-auto mb-2" />
             <p className="text-xs font-bosenAlt">LOADING</p>
           </div>
         </div>
@@ -196,18 +222,18 @@ export function VideoThumbnail({
           isLoading ? 'animate-pulse' : (isMobile() ? '' : 'group-hover:bg-white/30')
         } ${isPlaying && !isLoading ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}>
           {isLoading ? (
-            <div className="w-6 h-6 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            <div className="w-4 h-4 sm:w-6 sm:h-6 border-2 border-white/40 border-t-white rounded-full animate-spin" />
           ) : isPlaying ? (
             <Pause className={`text-white ${
               aspectRatio === 'vertical' 
-                ? (isFullscreen ? 'w-8 h-8' : 'w-5 h-5')
-                : (isFullscreen ? 'w-10 h-10' : 'w-6 h-6')
+                ? (isFullscreen ? 'w-6 sm:w-8 h-6 sm:h-8' : 'w-4 sm:w-5 h-4 sm:h-5')
+                : (isFullscreen ? 'w-8 sm:w-10 h-8 sm:h-10' : 'w-5 sm:w-6 h-5 sm:h-6')
             }`} />
           ) : (
             <Play className={`text-white ml-1 ${
               aspectRatio === 'vertical' 
-                ? (isFullscreen ? 'w-8 h-8' : 'w-5 h-5')
-                : (isFullscreen ? 'w-10 h-10' : 'w-6 h-6')
+                ? (isFullscreen ? 'w-6 sm:w-8 h-6 sm:h-8' : 'w-4 sm:w-5 h-4 sm:h-5')
+                : (isFullscreen ? 'w-8 sm:w-10 h-8 sm:h-10' : 'w-5 sm:w-6 h-5 sm:h-6')
             }`} />
           )}
         </div>
@@ -223,25 +249,25 @@ export function VideoThumbnail({
         onClick={toggleFullscreen}
         className={`absolute bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center transition-all duration-300 z-20 ${
           isFullscreen 
-            ? 'top-8 right-8 w-12 h-12 opacity-100' 
-            : 'top-4 right-4 w-10 h-10 opacity-0 group-hover:opacity-100'
+            ? 'top-4 sm:top-8 right-4 sm:right-8 w-10 sm:w-12 h-10 sm:h-12 opacity-100' 
+            : 'top-2 sm:top-4 right-2 sm:right-4 w-8 sm:w-10 h-8 sm:h-10 opacity-0 group-hover:opacity-100'
         }`}
       >
         {isFullscreen ? (
-          <X size={20} className="text-white" />
+          <X size={isMobile() ? 16 : 20} className="text-white" />
         ) : (
-          <Maximize2 size={16} className="text-white" />
+          <Maximize2 size={isMobile() ? 12 : 16} className="text-white" />
         )}
       </button>
       
       {/* Title Badge */}
       <div className={`absolute transition-all duration-300 z-20 ${
         isFullscreen 
-          ? 'bottom-8 left-8 opacity-100' 
-          : 'bottom-4 left-4 opacity-0 group-hover:opacity-100'
+          ? 'bottom-4 sm:bottom-8 left-4 sm:left-8 opacity-100' 
+          : 'bottom-2 sm:bottom-4 left-2 sm:left-4 opacity-0 group-hover:opacity-100'
       }`}>
         <span className={`text-white font-bosenAlt bg-black/50 px-3 py-1 rounded-full ${
-          isFullscreen ? 'text-lg' : 'text-sm'
+          isFullscreen ? 'text-base sm:text-lg' : 'text-xs sm:text-sm'
         }`}>
           {title}
         </span>

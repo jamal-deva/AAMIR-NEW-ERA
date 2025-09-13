@@ -5,13 +5,17 @@ interface MousePosition {
   y: number;
 }
 
+// Check if device is mobile
+const isMobile = () => window.innerWidth < 768;
+
 export function useThrottledMouseTracking(isEnabled: boolean = true) {
   const [mousePosition, setMousePosition] = useState<MousePosition>({ x: 0, y: 0 });
   const [isCursorInsideHero, setIsCursorInsideHero] = useState(false);
   const rafRef = useRef<number>();
 
   useEffect(() => {
-    if (!isEnabled) return;
+    // Disable mouse tracking on mobile devices
+    if (!isEnabled || isMobile()) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       if (rafRef.current) {
@@ -37,7 +41,7 @@ export function useThrottledMouseTracking(isEnabled: boolean = true) {
       });
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
@@ -47,10 +51,17 @@ export function useThrottledMouseTracking(isEnabled: boolean = true) {
     };
   }, [isCursorInsideHero, isEnabled]);
 
-  const handleMouseEnter = () => setIsCursorInsideHero(true);
+  const handleMouseEnter = () => {
+    if (!isMobile()) {
+      setIsCursorInsideHero(true);
+    }
+  };
+  
   const handleMouseLeave = () => {
-    setIsCursorInsideHero(false);
-    setMousePosition({ x: 0, y: 0 });
+    if (!isMobile()) {
+      setIsCursorInsideHero(false);
+      setMousePosition({ x: 0, y: 0 });
+    }
   };
 
   return {

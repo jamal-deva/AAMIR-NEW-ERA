@@ -85,6 +85,9 @@ html {
   overflow-y: auto;
   scroll-behavior: smooth;
   height: auto;
+  /* Optimize scrolling on mobile */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none; /* Prevent pull-to-refresh */
 }
 
 body {
@@ -92,6 +95,36 @@ body {
   /* Enable smooth scrolling on iOS */
   -webkit-overflow-scrolling: touch;
   height: auto;
+  /* Prevent bounce scrolling on iOS */
+  overscroll-behavior: none;
+  /* Optimize touch interactions */
+  touch-action: pan-y;
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 767px) {
+  * {
+    /* Reduce motion for better performance */
+    animation-duration: 0.8s !important;
+    transition-duration: 0.2s !important;
+  }
+  
+  /* Optimize transforms for mobile */
+  .will-change-transform {
+    will-change: auto;
+  }
+  
+  /* Disable hover effects on mobile */
+  .group:hover .group-hover\:opacity-100,
+  .group:hover .group-hover\:bg-white\/30,
+  .group:hover .group-hover\:bg-black\/10,
+  .hover\:scale-105:hover,
+  .hover\:shadow-xl:hover {
+    transform: none !important;
+    opacity: inherit !important;
+    background-color: inherit !important;
+    box-shadow: inherit !important;
+  }
 }
 
 /* Better text selection */
@@ -107,6 +140,28 @@ body {
 
 .will-change-opacity {
   will-change: opacity;
+}
+
+/* Mobile performance optimizations */
+@media (max-width: 767px) {
+  /* Reduce GPU usage on mobile */
+  video {
+    transform: none;
+    -webkit-transform: none;
+  }
+  
+  /* Optimize backdrop filters */
+  .backdrop-blur-sm {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  
+  /* Simplify gradients on mobile */
+  .bg-gradient-to-br,
+  .bg-gradient-to-t {
+    background-image: none;
+    background-color: rgba(31, 41, 55, 1); /* fallback solid color */
+  }
 }
 
 /* Reduce motion for users who prefer it */

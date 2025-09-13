@@ -28,7 +28,10 @@ export function MobileBadgeCarousel({ isVisible }: MobileBadgeCarouselProps) {
   const [currentBadgeIndex, setCurrentBadgeIndex] = useState(0);
   const [isBadgeVisible, setIsBadgeVisible] = useState(true);
 
+  // Optimize for mobile performance
   useEffect(() => {
+    if (!isVisible) return; // Don't run interval when not visible
+    
     const interval = setInterval(() => {
       // Start fade out
       setIsBadgeVisible(false);
@@ -37,35 +40,37 @@ export function MobileBadgeCarousel({ isVisible }: MobileBadgeCarouselProps) {
       setTimeout(() => {
         setCurrentBadgeIndex((prev) => (prev + 1) % badges.length);
         setIsBadgeVisible(true);
-      }, 500); // 300ms fade out duration
+      }, 300); // Faster transition for mobile
       
-    }, 4000); // 3 seconds total cycle time 
+    }, 3000); // Faster cycle time for mobile
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isVisible]);
 
   const currentBadge = badges[currentBadgeIndex];
 
   return (
     <div 
-      className={`fixed top-8 left-1/2 transform -translate-x-1/2 z-20 md:hidden transition-opacity duration-500 ${
+      className={`fixed top-6 sm:top-8 left-1/2 transform -translate-x-1/2 z-20 md:hidden transition-opacity duration-300 ${
         isVisible ? 'opacity-100' : 'opacity-0'
       }`}
       style={{ pointerEvents: 'none' }}
     >
-      <div className="relative w-300 h-300">
+      <div className="relative w-16 h-16 sm:w-20 sm:h-20">
         {/* Base Badge PNG */}
         <img
           src={currentBadge.image}
           alt="testimonial badge"
-          className={`w-full h-auto block relative z-10 transition-opacity duration-300 ${
-            isBadgeVisible ? 'opacity-60' : 'opacity-0'
+          className={`w-full h-auto block relative z-10 transition-opacity duration-200 ${
+            isBadgeVisible ? 'opacity-50 sm:opacity-60' : 'opacity-0'
           }`}
+          loading="lazy"
+          decoding="async"
         />
 
         {/* Shine Overlay */}
         <div
-          className={`absolute inset-0 z-20 pointer-events-none animate-shine-diagonal transition-opacity duration-300 ${
+          className={`absolute inset-0 z-20 pointer-events-none animate-shine-diagonal transition-opacity duration-200 ${
             isBadgeVisible ? 'opacity-100' : 'opacity-0'
           }`}
           style={{
@@ -76,9 +81,9 @@ export function MobileBadgeCarousel({ isVisible }: MobileBadgeCarouselProps) {
             WebkitMaskRepeat: 'no-repeat',
             maskRepeat: 'no-repeat',
             animationDelay: `${currentBadge.shineDelay}s`,
-            animationDuration: `${currentBadge.shineDuration}s`,
+            animationDuration: `${currentBadge.shineDuration * 0.8}s`, // Faster animation on mobile
             '--shine-delay': `${currentBadge.shineDelay}s`,
-            '--shine-duration': `${currentBadge.shineDuration}s`,
+            '--shine-duration': `${currentBadge.shineDuration * 0.8}s`,
           } as React.CSSProperties}
         />
       </div>

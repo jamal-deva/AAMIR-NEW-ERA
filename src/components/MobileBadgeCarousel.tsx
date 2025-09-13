@@ -20,7 +20,11 @@ const badges: Badge[] = [
   { image: "/badges/10.png", delay: 0, shineDelay: 0.1, shineDuration: 16 },
 ];
 
-export function MobileBadgeCarousel() {
+interface MobileBadgeCarouselProps {
+  isVisible: boolean;
+}
+
+export function MobileBadgeCarousel({ isVisible }: MobileBadgeCarouselProps) {
   const [currentBadgeIndex, setCurrentBadgeIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
 
@@ -44,7 +48,9 @@ export function MobileBadgeCarousel() {
 
   return (
     <div 
-      className="fixed top-8 left-1/2 transform -translate-x-1/2 z-20 md:hidden"
+      className={`fixed top-8 left-1/2 transform -translate-x-1/2 z-20 md:hidden transition-opacity duration-500 ${
+        isVisible ? 'opacity-100' : 'opacity-0'
+      }`}
       style={{ pointerEvents: 'none' }}
     >
       <div className="relative w-300 h-300">

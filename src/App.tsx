@@ -119,6 +119,7 @@ function App() {
  const [showportrait, setShowportrait] = React.useState(true);
    const [showbase, setShowbase] = React.useState(true);
    const [showeyes, setShoweyes] = React.useState(true);
+  const [showMobileBadges, setShowMobileBadges] = React.useState(true);
   const heroRef = useRef<HTMLDivElement>(null);
   const portraitRef = useRef<HTMLDivElement>(null);
   const baseRef = useRef<HTMLDivElement>(null);
@@ -169,7 +170,7 @@ function App() {
     ScrollTrigger.getAll().forEach(trigger => trigger.kill());
     gsap.registerPlugin(ScrollTrigger);
 
-    // Desktop-only animations
+    // Desktop-only hero animations
     if (!isMobile()) {
       // Create a single timeline for all hero elements
       const heroTl = gsap.timeline({
@@ -270,6 +271,15 @@ function App() {
       });
     });
 
+    // Mobile badge visibility trigger
+    ScrollTrigger.create({
+      trigger: portfolioSectionRef.current,
+      start: "top center",
+      fastScrollEnd: true,
+      onEnter: () => setShowMobileBadges(false),
+      onLeaveBack: () => setShowMobileBadges(true),
+    });
+
     return () => {
       ScrollTrigger.getAll().forEach(trigger => trigger.kill());
     };
@@ -287,7 +297,7 @@ function App() {
       {isLoading && <SplashScreen onLoadComplete={handleLoadComplete} />}
 
       {/* Mobile Badge Carousel - Only visible on mobile */}
-      <MobileBadgeCarousel />
+      <MobileBadgeCarousel isVisible={showMobileBadges} />
 
 <div
   ref={fixedBackgroundRef}

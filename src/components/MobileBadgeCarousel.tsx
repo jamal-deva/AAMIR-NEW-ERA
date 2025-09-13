@@ -26,17 +26,17 @@ interface MobileBadgeCarouselProps {
 
 export function MobileBadgeCarousel({ isVisible }: MobileBadgeCarouselProps) {
   const [currentBadgeIndex, setCurrentBadgeIndex] = useState(0);
-  const [isVisible, setIsVisible] = useState(true);
+  const [isBadgeVisible, setIsBadgeVisible] = useState(true);
 
   useEffect(() => {
     const interval = setInterval(() => {
       // Start fade out
-      setIsVisible(false);
+      setIsBadgeVisible(false);
       
       // After fade out completes, change badge and fade in
       setTimeout(() => {
         setCurrentBadgeIndex((prev) => (prev + 1) % badges.length);
-        setIsVisible(true);
+        setIsBadgeVisible(true);
       }, 500); // 300ms fade out duration
       
     }, 4000); // 3 seconds total cycle time 
@@ -59,14 +59,14 @@ export function MobileBadgeCarousel({ isVisible }: MobileBadgeCarouselProps) {
           src={currentBadge.image}
           alt="testimonial badge"
           className={`w-full h-auto block relative z-10 transition-opacity duration-300 ${
-            isVisible ? 'opacity-60' : 'opacity-0'
+            isBadgeVisible ? 'opacity-60' : 'opacity-0'
           }`}
         />
 
         {/* Shine Overlay */}
         <div
           className={`absolute inset-0 z-20 pointer-events-none animate-shine-diagonal transition-opacity duration-300 ${
-            isVisible ? 'opacity-100' : 'opacity-0'
+            isBadgeVisible ? 'opacity-100' : 'opacity-0'
           }`}
           style={{
             WebkitMaskImage: `url(${currentBadge.image})`,
